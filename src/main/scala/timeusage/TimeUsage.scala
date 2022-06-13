@@ -130,10 +130,10 @@ object TimeUsage extends TimeUsageInterface:
     ).otherwise("female").as("sex")
 
     val ageProjection: Column = when(
-      condition = df("teage") >= 15 && df("teage") <= 22,
+      condition = df("teage").between(15, 22),
       value = "young"
     ).when(
-      condition = df("teage") >= 23 && df("teage") <= 55,
+      condition = df("teage").between(23,55),
       value = "active"
     ).otherwise("elder").as("age")
 
@@ -141,20 +141,9 @@ object TimeUsage extends TimeUsageInterface:
     // Hint: you want to create a complex column expression that sums other columns
     //       by using the `+` operator between them
     // Hint: don’t forget to convert the value to hours
-    def sumColumns(columns: List[Column]): Column =
-      def go(columns: List[Column], sum: Column): Column =
-        columns match {
-          case Nil => sum
-          case h :: t => sum(t, sum + df(h.toString))
-        }
-      go(columns, lit(0d))
-
-    def toHours(column: Column): Column =
-      column / 60d
-
-    val primaryNeedsProjection: Column =  toHours(sumColumns(primaryNeedsColumns)).as("primaryNeeds")
-    val workProjection: Column = toHours(sumColumns(workColumns)).as("work")
-    val otherProjection: Column = toHours(sumColumns(otherColumns)).as("other")
+    val primaryNeedsProjection: Column =  primaryNeedsColumns.reduce(_ + _).divide(60).as("primaryNeeds")
+    val workProjection: Column = workColumns.reduce(_ + _).divide(60).as("work")
+    val otherProjection: Column = otherColumns.reduce(_ + _).divide(60).as("other")
 
     df
       .select(workingStatusProjection, sexProjection, ageProjection, primaryNeedsProjection, workProjection, otherProjection)
@@ -179,7 +168,6 @@ object TimeUsage extends TimeUsageInterface:
     */
   def timeUsageGrouped(summed: DataFrame): DataFrame =
     summed
-      .select($"working", $"sex", $"age", $"primaryNeeds", $"work", $"other")
       .groupBy($"working", $"sex", $"age")
       .agg(
         round(avg($"primaryNeeds"), 1).as("primaryNeeds"),
